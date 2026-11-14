@@ -2,6 +2,10 @@
 
 A port of Irem's *Kung-Fu Master* (1984) to the Uzebox by Dan MacDonald using video mode 748 and the coding assistance of Claude Opus 5.5.
 
+<img src="Kung-Fu_Master_shot_0000.png" alt="Uzebox KFM cuzebox-ex screenshot" />
+
+<img src="Kung-Fu_Master_shot_0001.png" alt="Uzebox KFM cuzebox-ex screenshot 2" />
+
 The custom 2 voice 2 bit ADPCM mixer and AY playback engine was contributed by Lee Weber aka D3thAdd3r.
 
 Kung-Fu Master requires 128 KB SPI RAM to run.
