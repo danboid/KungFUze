@@ -18,8 +18,8 @@
 #define M74_ROMMASK_OFF    0      /* only zero (0xFE) and full (0xFF) masks are used */
 /* the custom blitter's flat-colour table, addressed like the mask indices */
 #define KFB_FILL_OFF       (KFB_FILL - (KFM_TILES / 32))
-/* Extra cycles before every raw SPI RAM read of the custom blitter (see src/kfb.s); 4 is
-** what the Omega needed. Override with make EXTRA=-DKFB_SPI_PAD=n. */
+/* Extra cycles before every raw SPI RAM read of the custom blitter (see src/kfb.s); 1 is
+** what fit the Omega best. Override with make EXTRA=-DKFB_SPI_PAD=n. */
 /* Sound level: KFM_VOLUME 2 full, 1 half (the default: full levels browned out an Omega's supply),
 ** 0 a quarter. (-DKFM_LOUD: 2) */
 #ifndef KFM_VOLUME
