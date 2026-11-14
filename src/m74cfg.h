@@ -20,14 +20,10 @@
 #define KFB_FILL_OFF       (KFB_FILL - (KFM_TILES / 32))
 /* Extra cycles before every raw SPI RAM read of the custom blitter (see src/kfb.s); 1 is
 ** what fit the Omega best. Override with make EXTRA=-DKFB_SPI_PAD=n. */
-/* Sound level: KFM_VOLUME 2 full, 1 half (the default: full levels browned out an Omega's supply),
-** 0 a quarter. (-DKFM_LOUD: 2) */
+/* Sound level: KFM_VOLUME 2 full (the default, the arcade's level), 1 half, 0 a quarter.
+** Override with make EXTRA=-DKFM_VOLUME=n. */
 #ifndef KFM_VOLUME
-#ifdef KFM_LOUD
 #define KFM_VOLUME 2
-#else
-#define KFM_VOLUME 1
-#endif
 #endif
 
 #ifndef KFB_SPI_PAD

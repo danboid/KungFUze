@@ -81,7 +81,7 @@ static s16 th_cx, th_cy;            /* Thomas's offset from his screen spot: > 0
 
 #ifdef KFM_SOUND
 /* sound effects: voice 0 Thomas (shout, hurt), voice 1 impacts and the knife */
-#define SFX_GAIN (16U << KFM_VOLUME)       /* 64 full, 32 half (the default), 16 a quarter */
+#define SFX_GAIN (16U << KFM_VOLUME)       /* 64 full (the default), 32 half, 16 a quarter */
 static __attribute__((unused)) void sfx_play(u8 voice, u32 pos, u32 bytes, u32 samples)
 {
 	MixerClip c;

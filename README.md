@@ -56,7 +56,7 @@ Build options:
 | `LINES=184` | The display height in lines. 184 is recommended: the arcade's floor and the characters' feet are all visible, with only its decorative base cropped. The Makefile's default is 216. |
 | `GAME=1 SOUND=1` | The game, with sound. Without `GAME=1` the build is the sprite benchmark (see the end of this file). |
 | `DEBUG=1` | The debugging aids: the statistics and diagnostics pages (Select in play), a crash log that survives a reset, and the SPI RAM self-check. Without it the game has one more RAM tile. |
-| `EXTRA="-DKFM_VOLUME=n"` | 0 quarter, 1 half (the default), 2 full volume (also `-DKFM_LOUD`) |
+| `EXTRA="-DKFM_VOLUME=n"` | 2 full volume (the default, the arcade's level), 1 half, 0 quarter |
 | `EXTRA="-DKFB_SPI_PAD=n"` | Extra cycles before each of the sprite blitter's SPI RAM reads (default 1; 0 gave drawing errors on an Omega) |
 | `EXTRA="-DKFM_FADE"` | The floor's music fades in over half a second |
 | Test builds | See **Debugging and testing** |
