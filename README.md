@@ -2,6 +2,8 @@
 
 A port of Irem's *Kung-Fu Master* (1984) to the Uzebox by Dan MacDonald using video mode 748 and the coding assistance of Claude Opus 5.5.
 
+The custom 2 voice 2 bit ADPCM mixer and AY playback engine was contributed by Lee Weber aka D3thAdd3r.
+
 Kung-Fu Master requires 128 KB SPI RAM to run.
 
 The graphics, moves and sound are taken from **your own** arcade ROM set at build time; no ROM data is included here.
