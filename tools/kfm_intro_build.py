@@ -184,17 +184,49 @@ def main():
                 k += 1
                 extended += 1
     print('knives: %d frames added, flying on off the screen' % extended)
+    # The grippers: two at most (the RAM tiles hold no more). The arcade sometimes has three, and lists
+    # the newest first: keeping the first two in its order swapped which ones were drawn whenever one
+    # came on (the left one seemed to jump back as they walked in). Each gripper is followed from frame
+    # to frame instead, and the two drawn stay drawn for as long as they are there.
+    def is_grip(o):
+        return any(e[0] in (4, 5) for e in o)
+    keep, tracks, ntrack, shown = [], {}, 0, []
+    for sidx, nchar, objs in src:
+        pos = [(i, min(e[5] for e in o), min(e[6] for e in o)) for i, o in enumerate(objs) if is_grip(o)]
+        # matched as a whole (the most pairs, then the least movement): when they all turn at once, each
+        # one's nearest track can be its neighbour's
+        def match(k, used):
+            if k == len(pos):
+                return (0, 0, {})
+            i, x, y = pos[k]
+            best = match(k + 1, used)
+            for t, (tx, ty) in tracks.items():
+                if t not in used and abs(x - tx) <= 14 and abs(y - ty) <= 12:
+                    n, c, m = match(k + 1, used | {t})
+                    cand = (n + 1, c + abs(x - tx) + abs(y - ty), {**m, i: t})
+                    if (-cand[0], cand[1]) < (-best[0], best[1]):
+                        best = cand
+            return best
+        ids = dict(match(0, frozenset())[2])
+        for i, x, y in pos:                                # a new gripper: the next id
+            if i not in ids:
+                ids[i] = ntrack
+                ntrack += 1
+        tracks = {ids[i]: (x, y) for i, x, y in pos}
+        seen = {t for t, (x, y) in tracks.items() if shift - 4 <= x < shift + 192}   # (mostly off the window: no slot)
+        shown = [t for t in shown if t in seen]
+        for t in sorted(seen):
+            if len(shown) < 2 and t not in shown:
+                shown.append(t)
+        keep.append({i for i, _, _ in pos if ids[i] in shown})
     own = collections.OrderedDict()
     frames = []
     dropped = 0
-    for sidx, nchar, objs in src:
+    for fi, (sidx, nchar, objs) in enumerate(src):
         out = []
-        grips = 0
-        for o in objs:
-            if any(e[0] in (4, 5) for e in o):        # the grippers: two at most (the rest flickered)
-                grips += 1
-                if grips > 2:
-                    continue
+        for oi, o in enumerate(objs):
+            if is_grip(o) and oi not in keep[fi]:
+                continue
             ents = [(c, code, fx, fy, n, x, y) for c, code, fx, fy, n, x, y in o]
             X0 = min(e[5] for e in ents)
             Y0 = min(e[6] for e in ents)
