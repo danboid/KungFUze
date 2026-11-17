@@ -116,7 +116,7 @@ Each directory has a `NOTICE.md` (origin, revision, files) and the licence text.
 | `tools/kfm_build.py` | Fits the playfield and HUD palettes, converts the 329 floor tile/colour combinations to ROM tiles (with masks for the tiles the arcade draws over sprites), and writes the flash asset blob (`gen/`). |
 | `tools/kfm_game_build.py` | Turns the captured poses into pre-shifted sprite streams in SPI RAM, with the moves' tables (`KFMG.DAT`, `gen/kfm_game.*`). |
 | `tools/kfm_audio_build.py` | Runs the sound ROMs on STEArcade's sound board model (an M6803, two AY-3-8910s, two MSM5205s): the voices are resampled, the AY effects rendered, the music and jingles recorded as per-frame change streams. |
-| `tools/kfm_intro_build.py` | Builds the intro's screen maps, typing lists and sprite playback. |
+| `tools/kfm_intro_build.py` | Builds the intro's screen maps, typing lists and sprite playback. It places the story's sprites 1 px left and 1 px up of the arcade's positions, and checks the rows the story's row layout depends on (see **Display**). |
 | `tools/kfm_pack.py` | (in `make`) Stamps the data's length and CRC-16 before it goes into the `.uze`. |
 
 ### Memory
@@ -125,11 +125,13 @@ Each directory has a `NOTICE.md` (origin, revision, files) and the licence text.
 - **SPI RAM (about 124 KB of 128 KB):**
   - **bank 0:** the floor and HUD maps, the knife thrower's death poses, the sound clips, the music and jingles, and the intro;
   - **bank 1:** the game's poses.
-- **SRAM:** what is left after the program's variables is RAM tiles for the sprites: 58 in play (57 with `DEBUG=1`), and 65 during the story, which borrows the sound queue's page (see **Sound**).
+- **SRAM:** what is left after the program's variables is RAM tiles for the sprites: 58 in play (57 with `DEBUG=1`), and 71 during the story. The story is silent, so it borrows memory the game isn't using then: the sound queue's page above the tiles (7 tiles), and below them the enemies, the effect voices and a spare playfield row (6 tiles). These three sit together at the end of RAM in `.noinit`; the Makefile moves the mixer's voices there with `objcopy`. Select's sound during the story, the demo and the letter each get the memory back first, cleared.
 
 ### Display
 
 Mode 748 at 192 pixels wide: two HUD rows at the top, a separator line that loads the playfield palette, then the playfield (arcade x 32–223). The intro uses the same rows with its own row table and palette.
+
+In the story, screen row 1 is one plain colour on both screens and never has a sprite, so it is drawn by a 4-byte single-colour row (Mode 748's mode 2). The last row (22), which has no sprites either, takes row 1's row structure, which frees the last playfield row for the RAM tiles. `tools/kfm_intro_build.py` checks both rows against the ROM's data, and the story keeps every row if they don't qualify.
 
 ### Sprites
 
@@ -139,6 +141,7 @@ The sprites are drawn by a blitter written for this game (`src/kfb.s`, `kfb_pose
 - **Streaming.** The pose is then one SPI burst, each byte's transfer overlapped with a masked write, at 18 cycles per byte (two pixels).
 - **Deadline mode.** In play, a pose that won't fit in the blank time left is skipped for a frame instead of drawn late, using a per-pose cost estimate. That keeps 60 Hz but makes busy scenes flicker. The story draws every sprite.
 - **Draw order.** When RAM tiles run out, whatever is drawn last loses its lower rows. In play, the knife throwers and the boss, the largest sprites, are drawn first, so the shortage falls on the grippers. In the story the knives are drawn first, then the rest in the arcade's order.
+- **The story's grid alignment.** How many RAM tiles a character needs depends on how it lines up with the 8×8 grid. The story's background is flat, so its sprites are drawn 1 px left and 1 px up of the arcade's positions, which can't be seen; of the 64 alignments, that one needs the fewest tiles. Together with the 71 tiles, it took the intro from 1,112 cells dropped in 146 frames to 4 in 3 frames (measured in the emulator).
 - **Verification.** `tools/verify_blit.py` reads the VRAM rows and RAM tiles back from the emulator, rebuilds every cell Thomas covers in Python, and compares them byte for byte: exact across both facings and every x alignment.
 
 ### Sound (`SOUND=1`)
@@ -146,7 +149,7 @@ The sprites are drawn by a blitter written for this game (`src/kfb.s`, `kfb_pose
 - **The effects** use the KungFuMasterAudio hand-off's 2-voice 2-bit ADPCM mixer (`pcm_adpcm2_2v`). Its per-sample work is in assembly (`src/kfm_mix2.s`): the same values as the hand-off's C, in about half the time (`C_MIXER=1` builds with the C instead). It decodes in the foreground into a 256-byte queue at SRAM 0x0E00, topped up only while there is safe time before the display.
 - **The per-line routine.** `src/kfm_sound.s` replaces the kernel's `update_sound` and plays one queued sample a line. It also generates the music: two square-wave tone channels and the drums' noise, from the arcade's AY channels. It keeps the stock inline mixer's exact cycle contract (SYNC edges at 62 and 129 cycles, 189 in all), checked by a static walk of every path through its disassembly. The kernel's own sound engine is not linked; `src/kfm_nokernsnd.s` stands in for what the kernel's core refers to.
 - **The music** is read once a frame from per-frame change streams in SPI RAM. It keeps its own time from the vertical sync's frame count, catching up on late frames, and stays out of the vertical sync.
-- **The story is silent,** as the arcade's attract mode, so it borrows the queue's page as 7 more RAM tiles. Select's sound during the story hands it back for a moment.
+- **The story is silent,** as the arcade's attract mode, so it borrows the queue's page and the effect voices as more RAM tiles (see **Memory**). Select's sound during the story hands them back for a moment.
 
 What plays:
 

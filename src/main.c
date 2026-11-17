@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <avr/io.h>
 #include <avr/pgmspace.h>
+#include <string.h>
 #include <avr/interrupt.h>
 #include <util/crc16.h>
 #include <uzebox.h>
@@ -99,13 +100,17 @@ extern void kfs_mode(void);
 
 extern volatile u8 sync_pulse;
 extern volatile u8 sync_phase;
-extern u8 __bss_end;
+extern u8 __heap_start;                     /* the end of .noinit (the linker's) */
 extern const unsigned char kfm_rom[];
 
 /* ---- VRAM ---------------------------------------------------------------- */
 
 static m74_mode0_vram_t hudrow[2];
-m74_mode0_vram_t pfrow[PF_ROWS];               /* also used by src/kfb.s */
+/* In .noinit, which the linker places after .bss: pfrow, then the game's enemies (src/game.c) and the
+** effect voices (kfm_mixvar.o, renamed by the Makefile) lie together just below the RAM tiles. The
+** story lends its spare row of pfrow and the other two to the RAM tiles (see snd_borrow_step). */
+#define KFM_LEND __attribute__((section(".noinit.kfm_lend")))
+KFM_LEND m74_mode0_vram_t pfrow[PF_ROWS];      /* also used by src/kfb.s */
 static m74_mode2_vram_t seprow   = { 2U | M74_CFG_PAL_SRC_ROM,  KFM_PAL_PF, 0x00U };
 static m74_mode2_vram_t dummyrow = { 2U | M74_CFG_PAL_SRC_NONE, 0U,         0x00U };
 static u8  rowsel[] = { 0U, 17U, PF_LOG_TOP, 255U };
@@ -122,6 +127,23 @@ static const u16 vrow_intro[32] PROGMEM = {
 };
 static u8 rowsel_intro[] = { 0U, 255U };
 static u8 intro_on;
+#if KFI_STORY_PLAIN
+/* The story: screen row 1 is one plain colour (checked by tools/kfm_intro_build.py), drawn by a
+** single-colour row; row 22 (never reached by a sprite) uses row 1's VRAM row, hudrow[1], so the
+** last playfield row is free while the story plays. Its colour is set in intro_enter. */
+static m74_mode2_vram_t plainrow = { 2U | M74_CFG_PAL_SRC_NONE, 0U, 0x00U };
+#define IS(n) (((n) == 1) ? (u16)(&plainrow) : ((n) == 22) ? (u16)(&hudrow[1]) : IR(n))
+static const u16 vrow_story[32] PROGMEM = {
+	IS(0),  IS(1),  IS(2),  IS(3),  IS(4),  IS(5),  IS(6),  IS(7),  IS(8),  IS(9),  IS(10), IS(11),
+	IS(12), IS(13), IS(14), IS(15), IS(16), IS(17), IS(18), IS(19), IS(20), IS(21), IS(22),
+	(u16)(&dummyrow), (u16)(&dummyrow), (u16)(&dummyrow), (u16)(&dummyrow), (u16)(&dummyrow),
+	(u16)(&dummyrow), (u16)(&dummyrow), (u16)(&dummyrow), (u16)(&dummyrow)
+};
+#define KFM_SPARE_ROW (&pfrow[KFI_ROWS - 3])    /* the last playfield row the intro shows */
+#else
+#define vrow_story vrow_intro
+#endif
+static const u16* intro_tab = vrow_intro;      /* the intro's row table in use */
 #endif
 
 /* the 32 VRAM row pointers, in flash (saves 64 bytes of SRAM = 2 RAM tiles) */
@@ -1232,11 +1254,29 @@ static void mus_frame(void)
 ** (Normal builds with sound: debug builds keep the crash log between the tiles and the page.) */
 #if defined(KFM_SOUND) && !defined(KFM_DEBUG)
 #define SND_BORROW 7U
+/* ...and below the RAM tiles, from the story's spare playfield row (or, without one, from the end of
+** pfrow) to the tiles: the game's enemies and the effect voices, unused while the story plays. */
+#if defined(KFM_GAME) && KFI_STORY_PLAIN && (PF_ROWS == KFI_ROWS - 2)
+#define KFM_LEND_FROM ((u16)KFM_SPARE_ROW)
+#else
+#define KFM_LEND_FROM ((u16)(&pfrow[PF_ROWS]))
+#endif
 static u8 snd_hold;                       /* 1 draining, 2 borrowed, 3 a frame before the refill */
+static u8 lend_base, lend_n;              /* the lent tiles' base, and how many */
+static void kfm_lend_clear(void)          /* the lent memory as the game wants it: all zero */
+{
+	u16 to = 0x100U + 32U * kfm_stats.rtbase;
+	memset((void*)KFM_LEND_FROM, 0, to - KFM_LEND_FROM);
+}
 static void snd_borrow_begin(void) { if (!snd_hold) { snd_hold = 1U; } }
 static void snd_borrow_end(void)
 {
-	if (snd_hold) { m74_rtmax = kfm_stats.rtmax; snd_hold = 3U; }
+	if (snd_hold) {
+		m74_rtbase = kfm_stats.rtbase;
+		m74_rtmax = kfm_stats.rtmax;
+		if (snd_hold == 2U) { kfm_lend_clear(); }   /* (before an effect or the demo uses them) */
+		snd_hold = 3U;
+	}
 }
 static void snd_borrow_resume(void)      /* the story again: borrow once the effects have finished */
 {
@@ -1248,11 +1288,17 @@ static void snd_borrow_step(void)        /* once a frame */
 		MixerSamples[0xFFU] = 128U;
 		MixerWriteIndex = 0U;
 		MixerReadIndex = 0U;
-		m74_rtmax = kfm_stats.rtmax + SND_BORROW;
+		m74_rtbase = lend_base;
+		m74_rtmax = kfm_stats.rtmax + SND_BORROW + lend_n;
 		snd_hold = 2U;
 	} else if (snd_hold == 3U) {
 		snd_hold = 0U;                      /* (the tiles shrank a frame ago: the page is free) */
 	}
+}
+static void snd_lend_init(void)           /* at start-up, once the RAM tiles' base is known */
+{
+	lend_base = (u8)((((KFM_LEND_FROM + 31U) & ~31U) - 0x100U) >> 5);
+	lend_n = (u8)(kfm_stats.rtbase - lend_base);
 }
 #else
 #define snd_hold 0U
@@ -1260,6 +1306,7 @@ static void snd_borrow_begin(void) {}
 static void snd_borrow_end(void) {}
 static __attribute__((unused)) void snd_borrow_step(void) {}
 static void snd_borrow_resume(void) {}
+static void snd_lend_init(void) {}
 #endif
 
 /* top up the sample queue, 32 samples at a time, while there is safe time before the display */
@@ -1276,12 +1323,23 @@ static void snd_fill(void)
 #endif
 
 #ifdef KFM_GAME
-static m74_mode0_vram_t* intro_row(u8 k) { return (k < 2U) ? &hudrow[k] : &pfrow[k - 2U]; }
+static m74_mode0_vram_t* intro_row(u8 k)      /* screen row k's VRAM row in the table in use, or 0 */
+{
+	u16 r = pgm_read_word(&intro_tab[k]);
+	if (r == (u16)(&dummyrow)) { return 0; }
+#if KFI_STORY_PLAIN
+	if (r == (u16)(&plainrow)) { return 0; }
+#endif
+	return (m74_mode0_vram_t*)r;
+}
 
 static void intro_map(u16 map)             /* show a screen map on the intro's rows */
 {
 	u8 k;
-	for (k = 0U; k < KFI_ROWS; k++) { intro_row(k)->bg_addr = map + 32U * k; }
+	for (k = 0U; k < KFI_ROWS; k++) {
+		m74_mode0_vram_t* r = intro_row(k);
+		if (r) { r->bg_addr = map + 32U * k; }
+	}
 }
 
 /* Mode 748's row-table and row-selector pointers are 16-bit: written a byte at a time, so they are
@@ -1294,20 +1352,41 @@ static void m74_switch(u16 vaddr, u16 rows)
 	m74_rows  = rows;
 }
 
-static void intro_enter(u16 map)
+static void intro_rows(const u16* tab)      /* the intro's rows from this table: tiles and config */
+{
+	u8 k;
+	intro_tab = tab;
+	for (k = 0U; k < KFI_ROWS; k++) {
+		m74_mode0_vram_t* r = intro_row(k);
+		if (r) {
+			r->config = 0U;
+			r->t0_addr_h = KFM_INTRO_TILES >> 8;
+			r->t1_addr_h = (KFM_INTRO_TILES >> 8) + 0x10U;
+		}
+	}
+}
+
+static void intro_enter(u16 map, u8 story)  /* story: the story's table (its plain row); else every row */
 {
 	u8 k;
 	cam = 0;                                  /* (no scroll: the sprites are placed for xshift 0) */
-	for (k = 0U; k < KFI_ROWS; k++) {
-		m74_mode0_vram_t* r = intro_row(k);
-		r->config = 0U;
-		r->t0_addr_h = KFM_INTRO_TILES >> 8;
-		r->t1_addr_h = (KFM_INTRO_TILES >> 8) + 0x10U;
+#if KFI_STORY_PLAIN
+	{	/* the plain row's colour: its tile's (one colour; KFI_PLAIN_TILE < 0x80: the first 128) */
+		u8 px = pgm_read_byte((const u8*)KFM_INTRO_TILES + 32U * KFI_PLAIN_TILE) & 15U;
+		plainrow.col = pgm_read_byte((const u8*)KFM_PAL_PF + px);
 	}
+#endif
+	intro_rows(story ? vrow_story : vrow_intro);
 	intro_map(map);
 	for (k = 0U; k < 16U; k++) { ((volatile u8*)M74_PAL_OFF)[k] = pgm_read_byte((const u8*)KFM_PAL_PF + k); }
-	m74_switch((u16)(&vrow_intro[0]), (u16)(&rowsel_intro[0]));
+	m74_switch((u16)intro_tab, (u16)(&rowsel_intro[0]));
 	intro_on = 1U;
+}
+
+static void intro_to_letter(void)           /* from the story to the letter: every row again */
+{
+	m74_switch((u16)(&vrow_intro[0]), (u16)(&rowsel_intro[0]));
+	intro_rows(vrow_intro);
 }
 
 static void intro_leave(void)
@@ -1359,10 +1438,15 @@ int main(void)
 	m74_config = 0U;
 	SetRenderingParameters(FIRST_LINE, KFM_LINES);
 
-	/* RAM tiles: from the end of .bss up to the palette buffer at 0x0F00 */
-	rtstart = ((u16)(&__bss_end) + 31U) & ~31U;
+	/* RAM tiles: from the end of .noinit (pfrow, the enemies, the effect voices) up to the palette
+	** buffer at 0x0F00. .noinit is not cleared at start-up: these are. */
+	memset((void*)&pfrow[0], 0, (u16)(&__heap_start) - (u16)(&pfrow[0]));
+	rtstart = ((u16)(&__heap_start) + 31U) & ~31U;
 	kfm_stats.rtbase = (u8)((rtstart - 0x100U) >> 5);
 	kfm_stats.rtmax  = (u8)((KFM_SRAM_TOP - rtstart) >> 5);   /* above: the crash log (and the sound queue) */
+#ifdef KFM_SOUND
+	snd_lend_init();                            /* (the story's lent RAM tiles) */
+#endif
 	kfm_stats.vblank_lines = VBLANK_LINES;
 	SetUserPostVsyncCallback(&on_vsync);
 #ifdef KFM_SOUND

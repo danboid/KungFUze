@@ -127,7 +127,11 @@ $(OBJDIR)/kfm_sound.o: src/kfm_sound.s | $(OBJDIR)
 	$(CC) $(ASMFLAGS) -c $< -o $@
 
 $(OBJDIR)/kfm_mixvar.o: src/kfm_mixvar.c | $(OBJDIR)
-	$(CC) $(CFLAGS) -O2 -c $< -o $@
+	$(CC) $(CFLAGS) -O2 -c $< -o $@.tmp
+	# the effect voices into .noinit, after pfrow and the enemies: the story lends them to its RAM
+	# tiles (src/main.c, snd_borrow_step)
+	avr-objcopy --rename-section .bss.codecVoice=.noinit.kfm_lend $@.tmp $@
+	rm -f $@.tmp
 
 $(OBJDIR)/kfm_nokernsnd.o: src/kfm_nokernsnd.s | $(OBJDIR)
 	$(CC) $(ASMFLAGS) -c $< -o $@

@@ -26,6 +26,20 @@ COLS = 24
 MAP_STRIDE = 32
 
 
+# The story's sprites are drawn 1 px left and 1 px up of the arcade's places. They stand on a flat
+# background, so that cannot be seen, but it lines them up with the 8x8 grid so that they need far
+# fewer RAM tiles: measured over the whole intro, the cells dropped for want of RAM tiles fell from
+# 1,112 to 139 (the worst frame from 25 to 8).
+STORY_DX, STORY_DY = -1, -1
+
+# The story's plain row and spare row. Screen row 1 is one flat tile on both story screens, never typed
+# into and never reached by a sprite: src/main.c draws it as a single-colour row (Mode 748's mode 2),
+# and the last row (22), never reached by a sprite either, uses its VRAM row (hudrow[1]) instead of
+# the last playfield row's. That one, with the game's enemies and the effect voices after it, is lent
+# to the RAM tiles while the story plays. The build checks both rows.
+STORY_PLAIN_ROW, STORY_SPARE_ROW = 1, 22
+
+
 def canon(p):
     x0 = min(e[5] for e in p)
     y0 = min(e[6] for e in p)
@@ -198,6 +212,7 @@ def main():
                     own[key] = len(own)
                 ref, flip, ax, ay = 0x80 | own[key], 0, X0, Y0
             ux, uy = ax - shift, ay - R0 * 8 + 16               # Uzebox screen x; logical y (+16: the intro's rows)
+            ux, uy = ux + STORY_DX, uy + STORY_DY                 # (the grid alignment that needs fewest RAM tiles)
             if not (-32 <= ux < 224 and 0 <= uy < 256):
                 dropped += 1
                 continue
@@ -215,6 +230,34 @@ def main():
         for st, off in streams:
             addr.append((put(st), off, len(st)))
         meta.append((top, canvas.shape[0], addr[0], addr[1], a_sp))
+
+    # ---- the story's plain rows --------------------------------------------------------------------
+    import re
+    gsrc = (gen / 'kfm_game.c').read_text()
+    gmeta = gsrc[gsrc.index('kfg_meta[KFG_N_POSES]'):]
+    gmeta = [(int(a), int(b)) for a, b in re.findall(r'\{\s*(-?\d+),\s*(\d+)U?,\s*0x', gmeta)]
+    touched = set()
+    for sidx, nchar, out in frames:
+        for ref, flip, x, y in out:
+            top, rows = meta[ref & 0x7F][:2] if ref & 0x80 else gmeta[ref]
+            for line in range(y + top, y + top + rows):
+                touched.add((line >> 3) - 2)                  # logical row - 4 + the 2 HUD rows
+    plain_tile = screens[0][2]
+    story_plain, why = 1, []
+    for r in (STORY_PLAIN_ROW, STORY_SPARE_ROW):
+        if r in touched:
+            why.append('a sprite reaches row %d' % r)
+    for m, typing, b in screens:
+        r = STORY_PLAIN_ROW
+        if b != plain_tile or any(m[r * MAP_STRIDE + c] != b for c in range(COLS + 1)):
+            why.append('row %d is not one plain tile' % r)
+        if any(o // MAP_STRIDE == r for o, t in typing):
+            why.append('text is typed into row %d' % r)
+    if why:
+        print('the story keeps every row (%s)' % '; '.join(why))
+        story_plain = 0
+    print('story: sprites reach screen rows %d-%d; plain row %d, spare row %d: %s' %
+          (min(touched), max(touched), STORY_PLAIN_ROW, STORY_SPARE_ROW, 'used' if story_plain else 'not used'))
 
     # ---- into bank 0 ------------------------------------------------------------------------------
     pos_maps = [put(m, 32) for m, typing, b in screens]
@@ -238,6 +281,8 @@ def main():
          '#define KFI_STREAM 0x%04XU    /* per frame: screen, characters typed, n, n x (pose, flip, x + 32, y) */' % pos_stream,
          '#define KFI_N_FRAMES %dU' % len(frames),
          '#define KFI_N_POSES %d' % max(1, len(meta)),
+         '#define KFI_STORY_PLAIN %d   /* screen row %d plain, row %d spare (see kfm_intro_build.py) */' % (story_plain, STORY_PLAIN_ROW, STORY_SPARE_ROW),
+         '#define KFI_PLAIN_TILE 0x%02X   /* their tile (one colour) */' % plain_tile,
          'typedef struct { unsigned int map; unsigned int typing; unsigned char n_typing; unsigned char blank; } kfi_screen_t;',
          'extern const kfi_screen_t kfi_screens[KFI_N_SCREENS];',
          'extern const kfg_meta_t kfi_meta[KFI_N_POSES];',

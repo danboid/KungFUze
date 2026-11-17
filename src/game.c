@@ -51,7 +51,7 @@ typedef struct {
 	s8  y;          /* knives: height above the floor */
 } ent_t;
 
-static ent_t ent[G_SLOTS];
+KFM_LEND static ent_t ent[G_SLOTS];   /* (after pfrow: lent to the story's RAM tiles, see src/main.c) */
 static u8  g_mode = G_TITLE;
 static u8  g_t;
 static u32 g_score;
@@ -187,7 +187,7 @@ static void story_start(void)
 	st_pos = KFI_STREAM;
 	st_frame = 0U;
 	st_screen = 0xFFU;
-	intro_enter(pgm_read_word(&kfi_screens[0].map));
+	intro_enter(pgm_read_word(&kfi_screens[0].map), 1U);
 }
 
 /* type (or, as the story loops, erase) characters towards this frame's count, a few a frame */
@@ -241,7 +241,7 @@ static void to_letter(void)                /* the letter (and the start jingle),
 	SFX(0, COIN);                          /* the arcade's coin voice greets Start */
 	st_want = 0U;
 	st_n = 0U;
-	if (!intro_on) { intro_enter(KFI_LETTER_MAP); }
+	if (!intro_on) { intro_enter(KFI_LETTER_MAP, 0U); } else { intro_to_letter(); }
 	intro_map(KFI_LETTER_MAP);
 	g_mode = G_LETTER; st_frame = 0U;
 	mus_play((u16)KFA_JINGLE_POS, 0U);
