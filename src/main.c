@@ -732,8 +732,9 @@ static KFB_NOINLINE void kfb_draw(u8 flip, s16 x, s16 y)
 	if (w > KFB_MAXW) { kfm_dropped++; return; }
 
 	/* cost estimate, in scanlines (interrupts included: 1400 main cycles a line). Measured in
-	** cuzebox-ex: allocation ~230 cycles a new cell + ~150 a band, streaming 18 + KFB_SPI_PAD
-	** cycles a byte + ~20 a row. Cells already allocated by another sprite make it pessimistic. */
+	** cuzebox-ex: allocation (the assembly allocator) at most ~240 cycles a new cell + ~1700,
+	** streaming 18 + KFB_SPI_PAD cycles a byte + ~20 a row. Cells already allocated by another
+	** sprite are reused and not counted. */
 	{
 		u16 n = ((u8)vx & 1U) ? kfb_md.n1 : kfb_md.n0;
 		u16 cells = 0U;                         /* cells still to allocate (others are reused) */
@@ -747,15 +748,16 @@ static KFB_NOINLINE void kfb_draw(u8 flip, s16 x, s16 y)
 				if (hi > 24) { hi = 24; }
 				if (lo > hi) { continue; }
 				d = pfrow[tr - 4U].data + (u8)lo;
-				for (k = (u8)(hi - lo) + 1U; k; k--) { cells += (u8)(~*d++ >> 7); }
+				for (k = (u8)(hi - lo) + 1U; k; k--) { cells += (u8)((u8)~*d++ >> 7); }   /* (u8) first: ~ promotes to a negative int */
 			}
 		}
-		/* calibrated against measured phase times (cuzebox-ex, interrupts included) */
+		/* calibrated against measured phase times (cuzebox-ex, interrupts included; the allocation
+		** constants are a worst-case fit over ~6800 sprites of the two busiest play scenes) */
 		/* in lines, rounded up: multiplied by a reciprocal a little above 1/1800 and 1/1600 (the
 		** estimates can only come out equal or higher: the deadline stays safe), not divided: the
 		** two 32-bit divisions per pose cost about 3 lines a frame in a busy scene. The values
-		** stay below 2^16 (cells <= 72, nb <= 24, n <= 2048, rows <= 96). */
-		est_alloc  = (u8)(((u32)(u16)((u16)cells * 230U + (u16)nb * 150U + 400U + 1799U) * 37U) >> 16);
+		** stay below 2^16 (cells <= 72, n <= 2048, rows <= 96). */
+		est_alloc  = (u8)(((u32)(u16)((u16)cells * 240U + 1700U + 1799U) * 37U) >> 16);
 		est_stream = (u8)(((u32)(u16)(n * (18U + KFB_SPI_PAD) + (u16)rows * 20U + 300U + 1599U) * 41U) >> 16);
 	}
 #ifdef KFB_FIXED_DEADLINE
