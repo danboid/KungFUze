@@ -3,18 +3,25 @@ EXTRA += -DKFM_DEBUG
 endif
 # Kung-Fu Master, Uzebox Mode 748
 #
-#   make assets ROM=/path/to/kungfum.zip       # graphics, moves and sound, all from the ROM set
-#   make GAME=1 SOUND=1       # -> _bin_/kungfum.uze, the game with its data packed in
-#   make                      # -> _bin_/kfm748.uze and _bin_/KFM.DAT: the sprite benchmark
+#   make assets ROM=/path/to/kungfum.zip   # graphics, moves and sound, all from the ROM set
+#   make                    # -> _bin_/kungfum.uze, the game (with sound, 168 lines) with its data packed in
+#   make GAME=0             # -> _bin_/kfm748.uze and _bin_/KFM.DAT: the sprite benchmark
 #
-# UZEBOX points at an Uzebox source tree (kernel/ and tools/packrom).
+# UZEBOX points at an Uzebox source tree (kernel/ and tools/packrom): ~/src/uzebox unless given.
+# Changing an option (LINES=, EXTRA=, ...) or the assets rebuilds what depends on it: no make clean.
 
-UZEBOX    ?= ../uzebox
+UZEBOX    ?= $(HOME)/src/uzebox
 STEARCADE ?= third_party/stearcade
 MIXERS    ?= third_party/kfa_mixer
 ROM       ?= kungfum.zip
 ROM_BASE  ?= 0x8C00
-LINES     ?= 216
+LINES     ?= 168
+GAME      ?= 1
+SOUND     ?= 1
+ifneq ($(GAME),1)
+# (the sound is the game's: the benchmark has none)
+override SOUND = 0
+endif
 
 TARGET = kfm748
 MCU    = atmega644
@@ -23,6 +30,11 @@ OUTDIR = _bin_
 OBJDIR = _obj_
 KERNEL_DIR = $(UZEBOX)/kernel
 PACKROM    = $(UZEBOX)/tools/packrom/packrom
+ifneq ($(filter-out assets clean,$(or $(MAKECMDGOALS),all)),)
+ifeq ($(wildcard $(KERNEL_DIR)/uzebox.h),)
+$(error No Uzebox source tree at $(UZEBOX): build with make UZEBOX=/path/to/uzebox)
+endif
+endif
 
 KERNEL_OPTIONS = -DVIDEO_MODE=748 -DINTRO_LOGO=0 -DSOUND_MIXER=MIXER_TYPE_INLINE
 CFLAGS  = -mmcu=$(MCU) -Wall -gdwarf-2 -std=gnu99 -DF_CPU=28636360UL -Os -fsigned-char \
@@ -71,6 +83,9 @@ endif
 
 OBJS  = $(addprefix $(OBJDIR)/,$(KOBJS) main.o kfb.o kfs.o kfm_rom.o kfm_tables.o $(GAME_OBJ) $(SOUND_OBJ))
 GEN   = gen/kfm_rom.h gen/kfm_rom.c gen/kfm_tables.c
+ifeq ($(GAME),1)
+GEN  += gen/kfm_game.h gen/kfm_game.c gen/kfm_intro.h gen/kfm_intro.c gen/kfm_audio.h
+endif
 
 all: $(OUTDIR)/$(TARGET).uze $(DATFILE) size
 
@@ -85,6 +100,18 @@ assets:
 
 $(GEN) build/KFM.DAT:
 	@echo "Generated assets missing: run 'make assets ROM=...' first"; false
+
+# Everything is rebuilt when the generated files or the build's options (LINES=, GAME=, SOUND=,
+# EXTRA=, ...) change, so that no make clean is needed: the options are kept in a stamp file,
+# rewritten only when they differ from the last build's.
+FLAGS_STAMP = $(OBJDIR)/flags.txt
+BUILD_FLAGS = $(CFLAGS) | $(LDFLAGS) $(SOUND_LD) | $(OBJS)
+$(FLAGS_STAMP): FORCE | $(OBJDIR)
+	@echo '$(BUILD_FLAGS)' | cmp -s - $@ || echo '$(BUILD_FLAGS)' > $@
+.PHONY: FORCE
+FORCE:
+$(OBJS): $(GEN) $(FLAGS_STAMP)
+$(OUTDIR)/$(TARGET).elf: $(FLAGS_STAMP)
 
 $(OBJDIR) $(OUTDIR):
 	mkdir -p $@

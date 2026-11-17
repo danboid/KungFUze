@@ -17,7 +17,7 @@ The graphics, moves and sound are taken from **your own** arcade ROM set at buil
 You need:
 
 - **avr-gcc and avr-libc**;
-- **the Uzebox repository** (its `kernel/` and `tools/packrom`), passed as `UZEBOX=`;
+- **the Uzebox repository** (its `kernel/` and a built `tools/packrom`), in `~/src/uzebox`, or passed as `UZEBOX=/path/to/uzebox`;
 - **Python 3** with NumPy and Pillow;
 - **the MAME ROM set `kungfum.zip`**. The set used in development has this SHA-256:
 
@@ -26,10 +26,11 @@ You need:
 ```
 
 ```sh
-make assets ROM=/path/to/kungfum.zip     # once (a few minutes): extracts, captures and builds the assets
-make clean
-make UZEBOX=/path/to/uzebox LINES=168 GAME=1 SOUND=1
+make assets ROM=/path/to/kungfum.zip     # once (a minute or two): extracts, captures and builds the assets
+make
 ```
+
+`make` builds the game with the recommended options (sound, 168 lines). No `make clean` is needed: changing an option or rebuilding the assets rebuilds whatever depends on it.
 
 Copy `_bin_/kungfum.uze` to the SD card: that one file is the whole game.
 
@@ -57,8 +58,10 @@ Build options:
 
 | Option | Effect |
 |---|---|
-| `LINES=168` | The display height in lines. 168 is recommended: the floor and the characters' feet stay visible, with the floor's lower edge and the decorative base below it cropped, and every line taken off the display is blank time for drawing sprites. Measured in the emulator, sprites skipped for lack of time (and so flicker) fall from 391 at 184 lines to 183 at 176 and 57 at 168 in the knife throwers' stretch, and from 51 to 24 and 5 in the gripper pile-up. The story's credits end on the last row a 168-line display shows; the letter loses its bottom edge. The Makefile's default is 216. |
-| `GAME=1 SOUND=1` | The game, with sound. Without `GAME=1` the build is the sprite benchmark (see the end of this file). |
+| `LINES=n` | The display height in lines (default 168). 168 is recommended: the floor and the characters' feet stay visible, with the floor's lower edge and the decorative base below it cropped, and every line taken off the display is blank time for drawing sprites. Measured in the emulator, sprites skipped for lack of time (and so flicker) fall from 391 at 184 lines to 183 at 176 and 57 at 168 in the knife throwers' stretch, and from 51 to 24 and 5 in the gripper pile-up. The story's credits end on the last row a 168-line display shows; the letter loses its bottom edge. |
+| `SOUND=0` | The game without sound (default `SOUND=1`) |
+| `GAME=0` | The sprite benchmark instead of the game (see the end of this file) |
+| `UZEBOX=path` | The Uzebox source tree (default `~/src/uzebox`) |
 | `DEBUG=1` | The debugging aids: the statistics and diagnostics pages (Select in play), a crash log that survives a reset, and the SPI RAM self-check. Without it the game has one more RAM tile. |
 | `EXTRA="-DKFM_VOLUME=n"` | 2 full volume (the default, the arcade's level), 1 half, 0 quarter |
 | `EXTRA="-DKFB_SPI_PAD=n"` | Extra cycles before each of the sprite blitter's SPI RAM reads (default 1; 0 gave drawing errors on an Omega) |
@@ -232,7 +235,7 @@ The test tools run [cuzebox-ex](https://github.com/weber21w/cuzebox-ex) headless
 - `tools/run_test.py --frames 600 --grips 6` measures the benchmark build (below).
 - `tools/verify_blit.py [--right]` checks the blitter's output byte for byte (benchmark build).
 
-## The sprite benchmark (`make` without `GAME=1`)
+## The sprite benchmark (`make GAME=0`)
 
 The measurement prototype the port grew from: floor 1 scrolling under joypad control or autoplay, Thomas's walk and up to six grippers, with no game logic. It builds `_bin_/kfm748.uze`, which loads a separate `_bin_/KFM.DAT`; copy both. Its controls:
 
