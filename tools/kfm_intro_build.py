@@ -39,6 +39,9 @@ STORY_DX, STORY_DY = -1, -1
 # to the RAM tiles while the story plays. The build checks both rows.
 STORY_PLAIN_ROW, STORY_SPARE_ROW = 1, 22
 
+# The copyright and the port's credit end on this row: the last that a 168-line display shows.
+CREDIT_LAST_ROW = 20
+
 
 def canon(p):
     x0 = min(e[5] for e in p)
@@ -95,18 +98,22 @@ def main():
             for c in range(32):
                 tm[r][c] = bg
         m = base_map(tm, R0, bg)
-        # the copyright up two rows; under it the port's credit (white, centred)
+        # the copyright moved up, to end with the port's credit (white, centred) on CREDIT_LAST_ROW
         import kfm_intro_capture as kic
         wa = kic.white_attr(intro)
         crow = max(r for r in range(NR) if any(m[r * MAP_STRIDE + c] != tidx[bg] for c in range(COLS)))
-        m[(crow - 2) * MAP_STRIDE:(crow - 1) * MAP_STRIDE] = m[crow * MAP_STRIDE:(crow + 1) * MAP_STRIDE]
-        for r in (crow - 1, crow):
+        ctop = CREDIT_LAST_ROW - len(kic.CREDIT)
+        if crow < ctop:
+            raise SystemExit('the copyright is above where the credits go')
+        copyright_row = bytes(m[crow * MAP_STRIDE:(crow + 1) * MAP_STRIDE])
+        for r in range(ctop, crow + 1):
             m[r * MAP_STRIDE:(r + 1) * MAP_STRIDE] = bytes([tidx[bg]] * (COLS + 1)) + bytes(MAP_STRIDE - COLS - 1)
+        m[ctop * MAP_STRIDE:(ctop + 1) * MAP_STRIDE] = copyright_row
         for k, ln in enumerate(kic.CREDIT):
             c0 = (COLS - len(ln)) // 2
             for i, ch in enumerate(ln):
                 if ch != ' ':
-                    m[(crow - 1 + k) * MAP_STRIDE + c0 + i] = tidx[(ord(ch), wa)]
+                    m[(ctop + 1 + k) * MAP_STRIDE + c0 + i] = tidx[(ord(ch), wa)]
         # the text, re-wrapped: words are runs of characters on one row in adjacent columns
         words, cur, last = [], [], None
         for r, c, code, at_ in sc['text']:

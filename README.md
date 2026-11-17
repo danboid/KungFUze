@@ -28,7 +28,7 @@ You need:
 ```sh
 make assets ROM=/path/to/kungfum.zip     # once (a few minutes): extracts, captures and builds the assets
 make clean
-make UZEBOX=/path/to/uzebox LINES=184 GAME=1 SOUND=1
+make UZEBOX=/path/to/uzebox LINES=168 GAME=1 SOUND=1
 ```
 
 Copy `_bin_/kungfum.uze` to the SD card: that one file is the whole game.
@@ -57,7 +57,7 @@ Build options:
 
 | Option | Effect |
 |---|---|
-| `LINES=184` | The display height in lines. 184 is recommended: the arcade's floor and the characters' feet are all visible, with only its decorative base cropped. The Makefile's default is 216. |
+| `LINES=168` | The display height in lines. 168 is recommended: the floor and the characters' feet stay visible, with the floor's lower edge and the decorative base below it cropped, and every line taken off the display is blank time for drawing sprites. Measured in the emulator, sprites skipped for lack of time (and so flicker) fall from 391 at 184 lines to 183 at 176 and 57 at 168 in the knife throwers' stretch, and from 51 to 24 and 5 in the gripper pile-up. The story's credits end on the last row a 168-line display shows; the letter loses its bottom edge. The Makefile's default is 216. |
 | `GAME=1 SOUND=1` | The game, with sound. Without `GAME=1` the build is the sprite benchmark (see the end of this file). |
 | `DEBUG=1` | The debugging aids: the statistics and diagnostics pages (Select in play), a crash log that survives a reset, and the SPI RAM self-check. Without it the game has one more RAM tile. |
 | `EXTRA="-DKFM_VOLUME=n"` | 2 full volume (the default, the arcade's level), 1 half, 0 quarter |
@@ -125,7 +125,7 @@ Each directory has a `NOTICE.md` (origin, revision, files) and the licence text.
 - **SPI RAM (about 124 KB of 128 KB):**
   - **bank 0:** the floor and HUD maps, the knife thrower's death poses, the sound clips, the music and jingles, and the intro;
   - **bank 1:** the game's poses.
-- **SRAM:** what is left after the program's variables is RAM tiles for the sprites: 58 in play (57 with `DEBUG=1`), and 71 during the story. The story is silent, so it borrows memory the game isn't using then: the sound queue's page above the tiles (7 tiles), and below them the enemies, the effect voices and a spare playfield row (6 tiles). These three sit together at the end of RAM in `.noinit`; the Makefile moves the mixer's voices there with `objcopy`. Select's sound during the story, the demo and the letter each get the memory back first, cleared.
+- **SRAM:** what is left after the program's variables is RAM tiles for the sprites: at 168 lines, 60 in play (59 with `DEBUG=1`), and 72 during the story (taller displays need more playfield rows, so they have fewer tiles). The story is silent, so it borrows memory the game isn't using then: the sound queue's page above the tiles (7 tiles), and below them the enemies and the effect voices (5 tiles; at 184 lines also a spare playfield row, for 6). These three sit together at the end of RAM in `.noinit`; the Makefile moves the mixer's voices there with `objcopy`. Select's sound during the story, the demo and the letter each get the memory back first, cleared.
 
 ### Display
 
