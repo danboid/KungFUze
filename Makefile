@@ -1,6 +1,9 @@
 ifeq ($(DEBUG),1)
 EXTRA += -DKFM_DEBUG
 endif
+ifeq ($(INVINCIBLE),1)
+EXTRA += -DKFM_INVINCIBLE
+endif
 # Kung-Fu Master, Uzebox Mode 748
 #
 #   make assets ROM=/path/to/kungfum.zip   # graphics, moves and sound, all from the ROM set

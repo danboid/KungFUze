@@ -62,6 +62,7 @@ Build options:
 | `SOUND=0` | The game without sound (default `SOUND=1`) |
 | `GAME=0` | The sprite benchmark instead of the game (see the end of this file) |
 | `UZEBOX=path` | The Uzebox source tree (default `~/src/uzebox`) |
+| `INVINCIBLE=1` | Invincibility for practice: Select on the title or game-over screen turns it on and off (no damage, the timer stops; INV in the HUD) |
 | `DEBUG=1` | The debugging aids: the statistics and diagnostics pages (Select in play), a crash log that survives a reset, and the SPI RAM self-check. Without it the game has one more RAM tile. |
 | `EXTRA="-DKFM_VOLUME=n"` | 2 full volume (the default, the arcade's level), 1 half, 0 quarter |
 | `EXTRA="-DKFB_SPI_PAD=n"` | Extra cycles before each of the sprite blitter's SPI RAM reads (default 1; 0 gave drawing errors on an Omega) |
@@ -78,7 +79,7 @@ Build options:
 | B or Y | Punch (in a jump: a flying kick) |
 | A or X | Kick (in a jump: a flying kick) |
 | Start | Start a game / pause |
-| Select | On the title or game-over screen: invincibility on / off (no damage, the timer stops; INV in the HUD). With `DEBUG=1`, in play: game HUD → statistics → diagnostics |
+| Select | With `INVINCIBLE=1`, on the title or game-over screen: invincibility on / off. With `DEBUG=1`, in play: game HUD → statistics → diagnostics |
 
 ## Features
 
@@ -88,11 +89,11 @@ Build options:
 - **The right wall:** walking right at the start, the camera follows Thomas to its end, then he walks across the screen until he is up against the wall.
 - **The grippers** walk in from both sides, grab and drain Thomas's energy. While the floor's right wall is on the screen, enemies come only from the left, as in the arcade.
 - **The knife throwers** throw high and low knives with the arcade's timing; a knife that hits leaves the arcade's red strike. Beaten, they die as in the arcade: hit, stagger, and fall backwards through the floor.
-- **The boss**, the stick fighter, appears in front of the stairs, with his laugh when he kills Thomas. Defeated, he falls; Thomas walks to the stairs and climbs them, and the floor clears with a time bonus.
+- **The boss**, the stick fighter, appears in front of the stairs, with his laugh when he kills Thomas. As the arcade's, he keeps out of reach of Thomas's kicks, feinting with his staff, so ducking and kicking doesn't beat him: he comes in only to strike, and backs off if Thomas attacks first, so Thomas wins by dodging his thrust (crouch under a high one, jump a low one) and countering as he comes in. Each of his hits takes a quarter of Thomas's energy, as the arcade's (16 of its 63). Defeated, he falls; Thomas walks to the stairs and climbs them, and the floor clears with a time bonus.
 - **Scoring:** the arcade's points and pop-ups (grippers: punch 200, kick 100; knife throwers: punch 800, kick 500), the timer ticking down, 3 lives, game over (with its jingle, then back to the intro) and pause.
 - **When Thomas dies,** the enemies turn and walk off the screen.
 - **Sound:** the arcade's sampled voices and effects, and the floor's music and jingles, rendered from the ROM's sound board.
-- **Invincibility,** for practice.
+- **Invincibility,** for practice (a build option: `INVINCIBLE=1`).
 
 Not yet: floors 2 to 5, with their enemies and bosses.
 

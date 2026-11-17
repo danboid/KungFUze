@@ -26,6 +26,19 @@
 #define G_GRIP_MAX    4U            /* grippers on screen at once */
 #define G_SLOTS       8U
 #define G_BOSS_HP     16U
+/* The boss, as the arcade's (watched in its emulation): he hovers out of reach of Thomas's
+** crouching kick, 9 px beyond it, wandering about a 32 px band and feinting with his staff, and
+** gives ground (more slowly than Thomas walks) when Thomas walks at him. Ducking and kicking, on
+** the spot or cornering him, never reaches him: he comes in only to strike, a quick lunge started
+** while Thomas isn't attacking and given up if Thomas attacks first, and reels back out of reach
+** when hit. So Thomas wins by dodging the thrust and countering as he comes in. Each of his hits
+** takes 16 of the arcade's 63 energy: here 10 of 40, so four hits empty the bar, as there.
+** (Distances: dist(), anchor to anchor; Thomas's moves reach their kfg_moves reach + 20.) */
+#define G_BOSS_NEAR   54            /* the crouching kick (reach 25) lands to 45 */
+#define G_BOSS_BAND   32
+#define G_BOSS_STRIKE 36            /* where a lunge stops to thrust: inside Thomas's kicks */
+#define G_BOSS_REACH  40            /* his thrust lands to here */
+#define G_BOSS_HIT    10U
 #define G_BOSS_CAM    64            /* the boss appears from here: the room before the stairs */
 #define G_STAIR_CAM   53            /* Thomas stops at the right edge of the stairs' bottom step */
 #define G_WALL_X      (221 * 8)     /* the floor's right wall (its left edge): map column 221 */
@@ -63,7 +76,7 @@ static u8  g_spawn_t, g_knife_t;
 static u8  g_hud_t, g_hud_page;
 static u8  g_time_dirty;                  /* the time changed: its 4 digits are rewritten on their own */     /* 0: game HUD, 1: statistics */
 static u16 g_rnd = 0xACE1U;
-static u8  g_invincible;                  /* Select on the title screen: no damage, the timer stops */
+static u8  g_invincible;                  /* (INVINCIBLE=1 builds) Select on the title screen: no damage, the timer stops */
 static u8  g_boss_kill;                   /* Thomas died in the boss fight: 1 the laugh is due, 2 playing */
 
 /* Thomas */
@@ -625,22 +638,47 @@ static void ent_update(ent_t* e)
 			if (ent[e->hp].type == T_KNIFER) { ent[e->hp].hp = 0U; }   /* the thrower may throw again */
 		}
 		break;
-	case T_BOSS:
+	case T_BOSS: {
+		s16 ad = (d < 0) ? -d : d;
+		bool back_ok, th_atk;
 		if (e->state == S_DOWN) { return; }
-		e->dir = (d > 0) ? -1 : 1;
+		e->dir = (d > 0) ? -1 : 1;                       /* (towards Thomas) */
+		back_ok = (e->dir > 0) ? (e->x > cam) : (e->x < cam + SCREEN_W - 24);   /* (not off the screen) */
+		th_atk = th_move < KFG_N_MOVES && th_move != KFG_MV_CROUCH && th_move != KFG_MV_JUMP;
 		if (e->state == S_WALK) {
-			if (d > 40 || d < -40) { if (e->t & 1U) { e->x += e->dir; } }
-			else if (e->t > 20U) { e->state = S_ATTACK; e->t = 0U; e->hp = (rnd8() & 1U) ? 1U : 2U; }
+			/* e->y: how far past G_BOSS_NEAR he means to stand, picked anew after each thrust */
+			s16 want = G_BOSS_NEAR + e->y;
+			if (e->t == 1U) { e->y = (s8)(rnd8() % G_BOSS_BAND); }
+			if (ad < G_BOSS_NEAR) {                       /* Thomas closes in: he gives ground, slowly */
+				if ((e->t & 1U) && back_ok) { e->x -= e->dir; }
+			} else if (ad > want + 1) {
+				if (e->t & 1U) { e->x += e->dir; }
+			} else if (ad < want - 1 && back_ok) {
+				if (e->t & 1U) { e->x -= e->dir; }
+			}
+			if (ad <= G_BOSS_REACH && e->t > 20U) {      /* Thomas walked into reach: a thrust */
+				e->state = S_ATTACK; e->t = 0U; e->hp = (rnd8() & 1U) ? 1U : 2U;
+			} else if (e->t > 60U + (rnd8() & 127U)) {    /* every 2 s or so: a lunge, or a feint */
+				if (!th_atk && (rnd8() & 1U)) { e->state = S_HOLD; e->t = 0U; }
+				else { e->state = S_ATTACK; e->t = 0U; e->hp = (rnd8() & 1U) ? 1U : 2U; }
+			}
+		} else if (e->state == S_HOLD) {                  /* the lunge: in fast, to thrust */
+			if (th_atk && ad > G_BOSS_REACH) { e->state = S_WALK; e->t = 0U; }   /* Thomas struck first */
+			else if (ad > G_BOSS_STRIKE) { e->x += 2 * e->dir; }
+			else { e->state = S_ATTACK; e->t = 0U; e->hp = (rnd8() & 1U) ? 1U : 2U; }
+			if (e->t > 50U) { e->state = S_WALK; e->t = 0U; }
 		} else if (e->state == S_ATTACK) {
-			if (e->t == 18U && d > -56 && d < 56 && g_mode == G_PLAY) {
+			if (e->t == 18U && ad <= G_BOSS_REACH && g_mode == G_PLAY) {
 				bool miss = (e->hp == 1U) ? th_low() : th_high();
-				if (!miss) { th_damage(8U); }
+				if (!miss) { th_damage(G_BOSS_HIT); }
 			}
 			if (e->t > 36U) { e->state = S_WALK; e->t = 0U; }
-		} else if (e->state == S_WAIT) {
+		} else if (e->state == S_WAIT) {                  /* hit: he reels back out of reach */
+			if (back_ok) { e->x -= e->dir; }
 			if (e->t > 20U) { e->state = S_WALK; e->t = 0U; }
 		}
 		break;
+	}
 	}
 }
 
@@ -674,14 +712,17 @@ static void game_update(u16 pad)
 		hit = pad & ~g_pad_prev2;
 		g_pad_prev2 = pad;
 	}
-	if ((hit & BTN_SELECT) && (g_mode == G_TITLE || g_mode == G_OVER)) {
-		g_invincible ^= 1U; g_hud_t = 0U;               /* title / game over: invincibility */
+	if (0) {
+#ifdef KFM_INVINCIBLE
+	} else if ((hit & BTN_SELECT) && (g_mode == G_TITLE || g_mode == G_OVER)) {
+		g_invincible ^= 1U; g_hud_t = 0U;               /* title / game over: invincibility (a build option) */
 		if (intro_on) { snd_borrow_end(); }           /* (the story's tiles hand the sound queue back) */
 		if (g_invincible) { SFX(0, KIAI); } else { SFX(1, STEP); }   /* (heard: the HUD is not shown) */
-#ifdef KFM_DEBUG
-	} else if ((hit & BTN_SELECT) && !intro_on) {      /* in play: game HUD -> statistics -> diagnostics */
-		hud_page_set((u8)((g_hud_page + 1U) % 3U));   /* (not during the intro: its rows are the HUD's) */
 #endif
+#ifdef KFM_DEBUG
+	} else if ((hit & BTN_SELECT) && !intro_on && g_mode != G_TITLE && g_mode != G_OVER) {
+		hud_page_set((u8)((g_hud_page + 1U) % 3U));   /* in play: game HUD -> statistics -> diagnostics */
+#endif                                                /* (not during the intro: its rows are the HUD's) */
 	}
 
 	switch (g_mode) {
@@ -900,7 +941,11 @@ static void game_hud(void)
 	SpiRamSeqWriteEnd();
 	SpiRamSeqWriteStart(0U, KFM_SPI_HUD + 96U);
 	switch (g_mode) {
+#ifdef KFM_INVINCIBLE
 	case G_TITLE: if (g_invincible) { hud_text(" START  SELECT:INV ON  "); } else { hud_text(" START  SELECT:INV OFF "); } break;
+#else
+	case G_TITLE: hud_text("         START          "); break;
+#endif
 	case G_PAUSE: hud_text("         PAUSE          "); break;
 	case G_READY: hud_text(" 1-PLAYER 1-FLOOR READY "); break;
 	case G_OVER:  hud_text("       GAME  OVER       "); break;
