@@ -73,7 +73,7 @@ Build options:
 
 | Input | Action |
 |---|---|
-| Left / Right | Walk (and turn); shake off grippers |
+| Left / Right | Walk (and turn). Held by grippers: turn, and shake them off with six quick changes of direction (letting go counts), each within 5 frames of the last, as the arcade |
 | Down | Crouch |
 | Up | Jump |
 | B or Y | Punch (in a jump: a flying kick) |
@@ -87,7 +87,7 @@ Build options:
 - **Floor 1:** the scrolling floor with the arcade's tiles and palettes, and the HUD (score, time, energy bars, lives).
 - **Thomas:** the arcade's animations, captured frame by frame. He walks, crouches, jumps, punches and kicks (standing, crouching, flying), shakes off grippers, and dies with the arcade's fall and cry.
 - **The right wall:** walking right at the start, the camera follows Thomas to its end, then he walks across the screen until he is up against the wall.
-- **The grippers** walk in from both sides, grab and drain Thomas's energy. While the floor's right wall is on the screen, enemies come only from the left, as in the arcade.
+- **The grippers** walk in from both sides, grab and drain Thomas's energy, as fast as the arcade's (each takes a full bar in about 4 seconds; two, half that). Held, Thomas can turn and duck but not walk, and shakes them off as in the arcade (its own counter, watched in its emulation). While the floor's right wall is on the screen, enemies come only from the left, as in the arcade.
 - **The knife throwers** throw high and low knives with the arcade's timing; a knife that hits leaves the arcade's red strike. Beaten, they die as in the arcade: hit, stagger, and fall backwards through the floor.
 - **The boss**, the stick fighter, appears in front of the stairs, with his laugh when he kills Thomas. As the arcade's, he keeps out of reach of Thomas's kicks, feinting with his staff, so ducking and kicking doesn't beat him: he comes in only to strike, and backs off if Thomas attacks first, so Thomas wins by dodging his thrust (crouch under a high one, jump a low one) and countering as he comes in. Each of his hits takes a quarter of Thomas's energy, as the arcade's (16 of its 63). Defeated, he falls; Thomas walks to the stairs and climbs them, and the floor clears with a time bonus.
 - **Scoring:** the arcade's points and pop-ups (grippers: punch 200, kick 100; knife throwers: punch 800, kick 500), the timer ticking down, 3 lives, game over (with its jingle, then back to the intro) and pause.

@@ -26,6 +26,9 @@
 #define G_GRIP_MAX    4U            /* grippers on screen at once */
 #define G_SLOTS       8U
 #define G_BOSS_HP     16U
+#define G_SHAKE_N     6U            /* the arcade's: 6 changes of Left / Right shake the grippers off, */
+#define G_SHAKE_WAIT  5U            /* each within 5 frames of the last */
+#define G_GRIP_DRAIN  10U           /* (63rds of an energy unit a frame, per holder: see S_HOLD) */
 /* The boss, as the arcade's (watched in its emulation): he hovers out of reach of Thomas's
 ** crouching kick, 9 px beyond it, wandering about a 32 px band and feinting with his staff, and
 ** gives ground (more slowly than Thomas walks) when Thomas walks at him. Ducking and kicking, on
@@ -85,8 +88,9 @@ static u8  th_frame;
 static u8  th_walk;
 static u8  th_hurt;                 /* flashing after a hit */
 static u8  th_holders;              /* grippers holding him */
-static u8  th_shake;                /* Left / Right alternations while held */
-static s8  th_last_dir;
+static u8  th_shake;                /* held: changes of Left / Right (low nybble, see G_SHAKE_N)
+                                    ** and frames since the last (high nybble) */
+static s8  th_last_dir;              /* Left / Right / neither, last frame */
 static u8  th_crouch;
 static u8  th_hit_done;             /* this move has connected */
 static s16 th_cx, th_cy;            /* Thomas's offset from his screen spot: > 0 walking to the right
@@ -418,12 +422,23 @@ static void th_update(u16 pad, u16 hit)
 	s8 dir = 0;
 	if (th_hurt) { th_hurt--; }
 
-	/* held: no walking (Down still ducks, as the arcade); Left / Right alternations shake the grippers off */
+	/* Held, as the arcade (its counter at E26D, watched in its emulation): no walking, but Left /
+	** Right turn him and Down still ducks. Every change of Left / Right (letting go counts) is one
+	** of the G_SHAKE_N that shake the grippers off, however many they are; G_SHAKE_WAIT frames
+	** without a change start the count again, so it takes a quick shake. */
+	{
+		s8 d = (pad & BTN_LEFT) ? -1 : ((pad & BTN_RIGHT) ? 1 : 0);
+		bool changed = (d != th_last_dir);
+		th_last_dir = d;
+		if (!th_holders || (!changed && (th_shake >> 4) + 1U >= G_SHAKE_WAIT)) { th_shake = 0U; }
+		else if (changed) { th_shake = (th_shake & 0x0FU) + 1U; }
+		else { th_shake += 0x10U; }
+	}
 	if (th_holders) {
 		th_crouch = (pad & BTN_DOWN) ? 1U : 0U;
-		s8 d = (pad & BTN_LEFT) ? -1 : ((pad & BTN_RIGHT) ? 1 : 0);
-		if (d != 0 && d != th_last_dir) { th_last_dir = d; th_shake++; }
-		if (th_shake >= 8U) {
+		if (pad & BTN_LEFT)  { facing_left = 1U; }
+		if (pad & BTN_RIGHT) { facing_left = 0U; }
+		if ((th_shake & 0x0FU) >= G_SHAKE_N) {
 			u8 i;
 			for (i = 0U; i < G_SLOTS; i++) {
 				if (ent[i].type == T_GRIP && ent[i].state == S_HOLD) {
@@ -438,7 +453,6 @@ static void th_update(u16 pad, u16 hit)
 		th_move = 0xFFU;
 		return;
 	}
-	th_shake = 0U;
 
 	if (th_move != 0xFFU) {                               /* a move plays out */
 		{	/* the attack is live for 4 frames from its furthest reach, and hits once */
@@ -594,7 +608,12 @@ static void ent_update(ent_t* e)
 				if (ent[k].type == T_GRIP && ent[k].state == S_HOLD && ent[k].dir == e->dir) { nth++; }
 			}
 			e->x = th_x() + ((e->dir > 0) ? -(10 + 7 * nth) : (10 + 7 * nth));
-			if ((e->t & 15U) == 0U && !g_invincible) { g_energy = (g_energy > 1U) ? g_energy - 1U : 0U; g_hud_t = 0U; }
+			/* the arcade's drain: each holder takes 1 of its 63 every 4 frames; here 10/63 of 1 of 40
+			** a frame (e->y, the walk's sub-pixel count, keeps the 63rds while he holds) */
+			if (!g_invincible) {
+				e->y += (s8)G_GRIP_DRAIN;
+				if (e->y >= 63) { e->y -= 63; g_energy = (g_energy > 1U) ? g_energy - 1U : 0U; g_hud_t = 0U; }
+			}
 		}
 		break;
 	case T_KNIFER:
